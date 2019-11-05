@@ -1,0 +1,23 @@
+#include "stm32f0xx_hal.h"
+
+#define I2C_BARO_SCL_PIN    GPIO_PIN_8
+#define I2C_BARO_SDA_PIN    GPIO_PIN_9
+#define I2C_BARO_PORT       GPIOB
+#define __HAL_I2C_BARO_GPIO_RCC_ENA __HAL_RCC_GPIOB_CLK_ENABLE()
+
+#define UART_DBG_RX_PIN     GPIO_PIN_3
+#define UART_DBG_TX_PIN     GPIO_PIN_2
+#define UART_DBG_PORT       GPIOA
+#define __HAL_UART_DBG_GPIO_RCC_ENA __HAL_RCC_USART2_CLK_ENABLE()
+
+#define SPI_SCK_PIN         GPIO_PIN_5
+#define SPI_MISO_PIN        GPIO_PIN_6
+#define SPI_MOSI_PIN        GPIO_PIN_7
+#define SPI_PORT            GPIOA
+
+#define SPI_CS_PIN          GPIO_PIN_6
+#define SPI_CS_PORT         GPIOB
+
+#define __HAL_SPI1_RCC_ENA __HAL_RCC_SPI1_CLK_ENABLE()
+#define __HAL_SPI_INTF_GPIO_RCC_ENA __HAL_RCC_GPIOA_CLK_ENABLE()
+#define __HAL_SPI_CS_GPIO_RCC_ENA __HAL_RCC_GPIOB_CLK_ENABLE()
