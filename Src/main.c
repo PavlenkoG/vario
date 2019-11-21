@@ -27,7 +27,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "platform_def.h"
-#include "bmp180.h"
+//#include "bmp180.h"
+#include "bmp280.h"
 #include "sdcard.h"
 #include "ff.h"
 /* USER CODE END Includes */
@@ -66,10 +67,11 @@ static void I2C_GPIO_Init(void);
 static void I2C_Init(void);
 static void SPI_GPIO_Init(void);
 static void SPI_Init(void);
-float BME280_CalcTf(s32 UT);
+float BME280_CalcTf(int32_t UT);
 
-s8 I2C_Read(u8 device_addr, u8 register_addr, u8* rdata, u8 len);
-s8 I2C_Write(u8 device_addr, u8 register_addr, u8* rdata, u8 len);
+int8_t I2C_Read(uint8_t device_addr, uint8_t register_addr, uint8_t* rdata, uint8_t len);
+int8_t I2C_Write(uint8_t device_addr, uint8_t register_addr, uint8_t* rdata, uint8_t len);
+void print_rslt(const char api_name[], int8_t rslt);
 
 /* USER CODE END PFP */
 
@@ -83,10 +85,13 @@ s8 I2C_Write(u8 device_addr, u8 register_addr, u8* rdata, u8 len);
  */
 int main(void) {
     /* USER CODE BEGIN 1 */
+    /*
     u32 upress = 0;
     u16 utemp = 0;
     u32 press = 0;
     s16 temp = 0;
+    */
+    int32_t temp = 0;
     float alti = 0.0;
 
     FATFS fs;
@@ -117,17 +122,28 @@ int main(void) {
     UART_Init();
     I2C_GPIO_Init();
     I2C_Init();
+    MX_DMA_Init();
+    MX_I2C2_Init();
     SPI_GPIO_Init();
     SPI_Init();
     __HAL_SPI_ENABLE(&SPI_HandleStruct);
+    SSD1306_Init();
     HAL_Delay(250);
     printf("Start\r\n");
+    printf("HCLK = %d\r\n", HAL_RCC_GetHCLKFreq());
+    SSD1306_GotoXY(0, 44);
+    SSD1306_Puts("Hello, habrahabr!!", &Font_7x10, SSD1306_COLOR_WHITE);
+    SSD1306_DrawCircle(10, 33, 7, SSD1306_COLOR_WHITE);
+    SSD1306_UpdateScreen();
+/*
     SDCARD_Unselect();
     int code = SDCARD_Init();
     if (code < 0) {
         printf("SDCARD_Init() failed, code = %d\r\n", code);
         return -1;
     }
+*/
+/*
     struct bmp180_t bmp180;
     bmp180.bus_read = I2C_Read;
     bmp180.bus_write = I2C_Write;
@@ -136,7 +152,37 @@ int main(void) {
     bmp180_init(&bmp180);
     bmp180.oversamp_setting = 3;
     bmp180.sw_oversamp = 1;
+*/
+    int8_t rslt;
+    struct bmp280_dev bmp;
+    struct bmp280_config conf;
+    struct bmp280_uncomp_data ucomp_data;
+    uint32_t pres32, pres64;
+    double pres;
+    bmp.delay_ms = HAL_Delay;
+    bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
+    /* Select the interface mode as I2C */
+    bmp.intf = BMP280_I2C_INTF;
 
+    /* Map the I2C read & write function pointer with the functions responsible for I2C bus transfer */
+    bmp.read = I2C_Read;
+    bmp.write = I2C_Write;
+    rslt = bmp280_init(&bmp);
+    print_rslt(" bmp280_init status", rslt);
+
+    rslt = bmp280_get_config(&conf, &bmp);
+    print_rslt(" bmp280_get_config status", rslt);
+    conf.filter = BMP280_FILTER_OFF;
+    conf.os_pres = BMP280_OS_16X;
+    conf.os_temp = BMP280_OS_2X;
+    conf.odr = BMP280_ODR_0_5_MS;
+    rslt = bmp280_set_config(&conf, &bmp);
+    print_rslt(" bmp280_set_config status", rslt);
+
+    /* Always set the power mode after setting the configuration */
+    rslt = bmp280_set_power_mode(BMP280_NORMAL_MODE, &bmp);
+    print_rslt(" bmp280_set_power_mode status", rslt);
+/*
     res = f_mount(&fs, "", 0);
     if (res != FR_OK) {
         printf("f_mount() failed, res = %d\r\n", res);
@@ -171,23 +217,53 @@ int main(void) {
         printf("Unmount failed, res = %d\r\n", res);
     }
     printf("Done!\r\n");
+*/
     /* USER CODE END 2 */
 
     /* Infinite loop */
     /* USER CODE BEGIN WHILE */
     while (1) {
         /* USER CODE END WHILE */
-        HAL_Delay(500);
-        HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+//      HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_5);
+
+       /*
+        if (bmp280_get_uncomp_data(&bmp280_data, &bmp) == BMP280_OK) {
+            printf("\033[2J");
+            printf("\033[36mtemperature\033[0m = %d \033[36mpressure\033[0m = %d \r\n",bmp280_data.uncomp_temp,bmp280_data.uncomp_press);
+        }
+        */
+        /* Reading the raw data from sensor */
+        rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
+
+        /* Getting the compensated pressure using 32 bit precision */
+        rslt = bmp280_get_comp_pres_32bit(&pres32, ucomp_data.uncomp_press, &bmp);
+
+        /* Getting the compensated pressure using 64 bit precision */
+        rslt = bmp280_get_comp_pres_64bit(&pres64, ucomp_data.uncomp_press, &bmp);
+
+        /* Getting the compensated pressure as floating point value */
+        rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
+        bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
+
+        alti = BME280_CalcTf(pres32);
+//      printf("UP: %ld, P32: %ld, P64: %ld, P64N: %ld, P: %f\r\n",
+//             ucomp_data.uncomp_press,
+//             pres32,
+//             pres64,
+//             pres64 / 256,
+//             pres);
+//      printf("\033[2J");
+//      printf("\033[36maltitude\033[0m = %f \033[36mtemp\033[0m = %d\r\n",alti,temp);
+        bmp.delay_ms(200); /* Sleep time between measurements = BMP280_ODR_1000_MS */
+/*
         upress = bmp180_get_uncomp_pressure();
         utemp = bmp180_get_uncomp_temperature();
         press = bmp180_get_pressure(upress);
         temp = bmp180_get_temperature(utemp);
         alti = BME280_CalcTf(press);
         printf("PRS %x\r\n",press);
+*/
 
-//      printf("\033[2J");
-//      printf("\033[36mtemperature\033[0m = %d \033[36mpressure\033[0m = %d \033[36malti\033[0m = %f\r\n",temp,press,alti);
     }
     /* USER CODE BEGIN 3 */
     /* USER CODE END 3 */
@@ -200,27 +276,43 @@ int main(void) {
 void SystemClock_Config(void) {
     RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
     RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
+    RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
+
 
     /** Initializes the CPU, AHB and APB busses clocks
-     */
-    RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-    RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-    RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
-    if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
+      */
+      RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+      RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+      RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+      RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+      RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+      RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL6;
+      RCC_OscInitStruct.PLL.PREDIV = RCC_PREDIV_DIV1;
+      if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+      {
         Error_Handler();
-    }
-    /** Initializes the CPU, AHB and APB busses clocks
-     */
-    RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-            | RCC_CLOCKTYPE_PCLK1;
-    RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
-    RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-    RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+      }
+      /** Initializes the CPU, AHB and APB busses clocks
+      */
+      RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                                  |RCC_CLOCKTYPE_PCLK1;
+      RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+      RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+      RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-    if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK) {
+      if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+      {
         Error_Handler();
-    }
+      }
+      PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART1|RCC_PERIPHCLK_USART2
+                                  |RCC_PERIPHCLK_I2C1;
+      PeriphClkInit.Usart1ClockSelection = RCC_USART1CLKSOURCE_PCLK1;
+      PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
+      PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_SYSCLK;
+      if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+      {
+        Error_Handler();
+      }
 }
 
 /* USER CODE BEGIN 4 */
@@ -238,8 +330,7 @@ static void LED_GPIO_Init(void) {
 static void I2C_GPIO_Init(void) {
     GPIO_InitTypeDef GPIO_InitStruct;
 
-    __HAL_I2C_BARO_GPIO_RCC_ENA
-    ;
+    __HAL_I2C_BARO_GPIO_RCC_ENA;
     GPIO_InitStruct.Pin = I2C_BARO_SDA_PIN | I2C_BARO_SCL_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
@@ -247,6 +338,15 @@ static void I2C_GPIO_Init(void) {
     GPIO_InitStruct.Alternate = GPIO_AF1_I2C1;
 
     HAL_GPIO_Init(I2C_BARO_PORT, &GPIO_InitStruct);
+/*
+    GPIO_InitStruct.Pin = GPIO_PIN_10 | GPIO_PIN_11;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_I2C2;
+
+    HAL_GPIO_Init(I2C_BARO_PORT, &GPIO_InitStruct);
+    */
 }
 
 static void SPI_GPIO_Init(void) {
@@ -291,8 +391,7 @@ static void SPI_Init(void) {
 
 static void I2C_Init(void) {
     I2C_InitTypeDef I2C_InitStruct;
-    __HAL_RCC_I2C1_CLK_ENABLE()
-    ;
+    __HAL_RCC_I2C1_CLK_ENABLE() ;
     I2C_InitStruct.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
     I2C_InitStruct.DualAddressMode = I2C_DUALADDRESS_DISABLE;
     I2C_InitStruct.GeneralCallMode = I2C_GENERALCALL_DISABLE;
@@ -305,19 +404,19 @@ static void I2C_Init(void) {
     HAL_I2C_Init(&I2C_HandleStruct);
 
 }
-s8 I2C_Read(u8 device_addr, u8 register_addr, u8* rdata, u8 len) {
+int8_t I2C_Read(uint8_t device_addr, uint8_t register_addr, uint8_t* rdata, uint8_t len) {
 
     uint8_t status = 0;
     status = HAL_I2C_Mem_Read(&I2C_HandleStruct, (uint8_t) device_addr,
             (uint8_t) register_addr, 1, (uint8_t*) rdata, (uint8_t) len, 100);
-    return (u8) status;
+    return (int8_t) status;
 
 }
-s8 I2C_Write(u8 device_addr, u8 register_addr, u8* rdata, u8 len) {
+int8_t I2C_Write(uint8_t device_addr, uint8_t register_addr, uint8_t* rdata, uint8_t len) {
     uint8_t status = 0;
     status = HAL_I2C_Mem_Write(&I2C_HandleStruct, (uint8_t) device_addr,
             (uint8_t) register_addr, 1, (uint8_t*) rdata, (uint8_t) len, 100);
-    return (u8) status;
+    return (int8_t) status;
 }
 
 static void UART_Init(void) {
@@ -342,13 +441,43 @@ static void UART_Init(void) {
     USART_HandleStruct.Init = USART_InitStruct;
     HAL_USART_Init(&USART_HandleStruct);
 }
+void print_rslt(const char api_name[], int8_t rslt)
+{
+    if (rslt != BMP280_OK)
+    {
+        printf("%s\t", api_name);
+        if (rslt == BMP280_E_NULL_PTR)
+        {
+            printf("Error [%d] : Null pointer error\r\n", rslt);
+        }
+        else if (rslt == BMP280_E_COMM_FAIL)
+        {
+            printf("Error [%d] : Bus communication failed\r\n", rslt);
+        }
+        else if (rslt == BMP280_E_IMPLAUS_TEMP)
+        {
+            printf("Error [%d] : Invalid Temperature\r\n", rslt);
+        }
+        else if (rslt == BMP280_E_DEV_NOT_FOUND)
+        {
+            printf("Error [%d] : Device not found\r\n", rslt);
+        }
+        else
+        {
+            /* For more error codes refer "*_defs.h" */
+            printf("Error [%d] : Unknown error code\r\n", rslt);
+        }
+    }
+}
 
-float BME280_CalcTf(s32 pressure) {
+
+float BME280_CalcTf(int32_t pressure) {
     float altitude = 0.0;
     float fPressure = 1.0 * pressure;
     altitude = 44330 * (1.0 - pow((fPressure / 100) / 1013.25, 0.1903));
     return altitude;
 }
+
 /* USER CODE END 4 */
 
 /**
