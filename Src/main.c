@@ -37,9 +37,13 @@
 #include "main.h"
 #include "ssd1306.h"
 #include "bmp280.h"
+#include "MPU-9250.h"
 #include "math.h"
+#include "cmsis_os.h"
 #include <stdio.h>  /*rtt*/
 #include <stdlib.h> /*rtt*/
+#include "FreeRTOSConfig.h"
+#include "cmsis_os.h"
 
 /** @addtogroup STM32F0xx_HAL_Examples
  * @{
@@ -57,6 +61,11 @@
 static void SystemClock_Config(void);
 static void Error_Handler(void);
 double BME280_CalcTf(double pressure);
+osThreadId printHandle1;
+osThreadId printHandle2;
+
+void printTask1(void *argument);
+void printTask2(void *argument);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -95,6 +104,9 @@ int main(void) {
     int32_t temp = 0;
     double alti = 0.0;
     double pres;
+    MPU9250_gyro_val gyro;
+    MPU9250_accel_val accel;
+
     bmp.delay_ms = HAL_Delay;
     bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
     /* Select the interface mode as I2C */
@@ -105,8 +117,8 @@ int main(void) {
     bmp.write = I2C_Write;
     rslt = bmp280_init(&bmp);
     rslt = bmp280_get_config(&conf, &bmp);
-	conf.filter = BMP280_FILTER_OFF;
-	conf.os_pres = BMP280_OS_16X;
+	conf.filter = BMP280_FILTER_COEFF_2;
+	conf.os_pres = BMP280_OS_2X;
 	conf.os_temp = BMP280_OS_2X;
 	conf.odr = BMP280_ODR_0_5_MS;
 	rslt = bmp280_set_config(&conf, &bmp);
@@ -118,31 +130,84 @@ int main(void) {
 	char cAlti[12];
 	char cTemp[12];
 	char cPress[12];
+	char cGyroX[12];
+	char cGyroY[12];
+	char cGyroZ[12];
+	char cAccelX[12];
+	char cAccelY[12];
+	char cAccelZ[12];
 	SSD1306_UpdateScreen();
+
+	rslt = MPU9250_drv_init();
+	if (rslt == MPU9250_OK) {
+		SSD1306_Puts("MPU9250 Ok", &Font_7x10, SSD1306_COLOR_WHITE);
+	}
+	if (rslt == MPU9250_NOT_FOUND) {
+		SSD1306_Puts("MPU9250 Not found", &Font_7x10, SSD1306_COLOR_WHITE);
+	}
+	if (rslt == MPU9250_INIT_ERROR) {
+		SSD1306_Puts("MPU9250 Init Err", &Font_7x10, SSD1306_COLOR_WHITE);
+	}
+	if (rslt == AK8963_INIT_ERROR) {
+		SSD1306_Puts("AK8963 Not found", &Font_7x10, SSD1306_COLOR_WHITE);
+	}
+	SSD1306_UpdateScreen();
+	HAL_Delay(2000);
+	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
+/*
+	osThreadDef(firstTask, printTask1, osPriorityNormal, 0, 128);
+	osThreadDef(secondTask, printTask2, osPriorityNormal, 0, 128);
+
+	osThreadCreate(osThread(firstTask),NULL);
+	osThreadCreate(osThread(secondTask),NULL);
+	osKernelStart ();
+*/
 	/* Infinite loop */
 	while (1) {
+#if 1
 		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
-
-		/* Getting the compensated pressure using 32 bit precision */
-		/* Getting the compensated pressure as floating point value */
 		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
-		rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
+  		rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
+		MPU9250_drv_read_gyro(&gyro);
+		MPU9250_drv_read_accel(&accel);
 
 		alti = BME280_CalcTf(pres);
-
+/*
 		sprintf(cAlti, "%.1f", alti);
 		sprintf(cTemp, "%d", temp);
 		sprintf(cPress, "%.3f", pres/100);
+		sprintf(cGyroX, "%.3f", gyro.x);
+		sprintf(cGyroY, "%.3f", gyro.y);
+		sprintf(cGyroZ, "%.3f", gyro.z);
+		sprintf(cAccelX, "%.3f", accel.x);
+		sprintf(cAccelY, "%.3f", accel.y);
+		sprintf(cAccelZ, "%.3f", accel.z);
 		SSD1306_Fill(SSD1306_COLOR_BLACK);
 		SSD1306_GotoXY(0, 0);
 		SSD1306_Puts(cAlti, &Font_7x10, SSD1306_COLOR_WHITE);
 		SSD1306_GotoXY(0, 8);
 		SSD1306_Puts(cTemp, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(0, 17);
+		SSD1306_GotoXY(0, 16);
 		SSD1306_Puts(cPress, &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_GotoXY(0, 24);
+		SSD1306_Puts(cGyroX, &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_GotoXY(64, 24);
+		SSD1306_Puts(cAccelX, &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_GotoXY(0, 32);
+		SSD1306_Puts(cGyroY, &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_GotoXY(64, 32);
+		SSD1306_Puts(cAccelY, &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_GotoXY(0, 40);
+		SSD1306_Puts(cGyroZ, &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_GotoXY(64, 40);
+		SSD1306_Puts(cAccelZ, &Font_7x10, SSD1306_COLOR_WHITE);
 		SSD1306_UpdateScreen();
-		bmp.delay_ms(200);
+		*/
+		printf("$%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f \r\n",\
+				alti, pres/100,gyro.x,gyro.y,gyro.z,accel.x,accel.y,accel.z);
+		bmp.delay_ms(20);
 //		printf("\033[36maltitude\033[0m = %f \033[36mtemp\033[0m = %d\r\n",alti,temp);
+#endif
 	}
 }
 
@@ -200,6 +265,27 @@ static void Error_Handler(void) {
 int __io_putchar(int ch) {
 	HAL_USART_Transmit(&USART_DEBUG_HandleStruct, (uint8_t*) &ch, 1, 0xFFFF);
 	return ch;
+}
+
+void printTask1 (void *argument) {
+	for (;;) {
+		SSD1306_Fill(SSD1306_COLOR_BLACK);
+		SSD1306_GotoXY(0, 0);
+		SSD1306_Puts("Task 1", &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_UpdateScreen();
+		vTaskDelay(1000);
+	}
+	osThreadTerminate(NULL);
+}
+void printTask2 (void *argument) {
+	for (;;) {
+		SSD1306_Fill(SSD1306_COLOR_BLACK);
+		SSD1306_GotoXY(0, 0);
+		SSD1306_Puts("Task 2", &Font_7x10, SSD1306_COLOR_WHITE);
+		SSD1306_UpdateScreen();
+		vTaskDelay(1000);
+	}
+	osThreadTerminate(NULL);
 }
 
 #ifdef  USE_FULL_ASSERT
