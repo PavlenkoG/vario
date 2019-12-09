@@ -106,6 +106,7 @@ int main(void) {
     double pres;
     MPU9250_gyro_val gyro;
     MPU9250_accel_val accel;
+    MPU9250_magnetometer_val magn;
 
     bmp.delay_ms = HAL_Delay;
     bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
@@ -170,6 +171,7 @@ int main(void) {
   		rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
 		MPU9250_drv_read_gyro(&gyro);
 		MPU9250_drv_read_accel(&accel);
+		MPU9250_drv_read_magnetometer(&magn);
 
 		alti = BME280_CalcTf(pres);
 /*
@@ -203,8 +205,8 @@ int main(void) {
 		SSD1306_Puts(cAccelZ, &Font_7x10, SSD1306_COLOR_WHITE);
 		SSD1306_UpdateScreen();
 		*/
-		printf("$%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f \r\n",\
-				alti, pres/100,gyro.x,gyro.y,gyro.z,accel.x,accel.y,accel.z);
+		printf("$%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.2f %.2f %.2f\r\n",\
+				alti, pres/100,gyro.x,gyro.y,gyro.z,accel.x,accel.y,accel.z, magn.x, magn.y, magn.z);
 		bmp.delay_ms(20);
 //		printf("\033[36maltitude\033[0m = %f \033[36mtemp\033[0m = %d\r\n",alti,temp);
 #endif
