@@ -93,10 +93,11 @@ int main(void) {
 	USART_DBG_Init();
 	SSD1306_Init();
 	MX_I2C1_Init();
+//  X_TIM3_Init();
 
 	/* Add your application code here
 	 */
-
+#if 1
     int rslt;
     struct bmp280_dev bmp;
     struct bmp280_config conf;
@@ -126,7 +127,6 @@ int main(void) {
 
 	/* Always set the power mode after setting the configuration */
 	rslt = bmp280_set_power_mode(BMP280_NORMAL_MODE, &bmp);
-
 	SSD1306_GotoXY(0, 0);
 	char cAlti[12];
 	char cTemp[12];
@@ -155,14 +155,15 @@ int main(void) {
 	SSD1306_UpdateScreen();
 	HAL_Delay(2000);
 	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
-/*
-	osThreadDef(firstTask, printTask1, osPriorityNormal, 0, 128);
+#endif
+#if 0
+	osThreadDef(firstTask, printTask1, osPriorityHigh, 0, 300);
 	osThreadDef(secondTask, printTask2, osPriorityNormal, 0, 128);
 
 	osThreadCreate(osThread(firstTask),NULL);
 	osThreadCreate(osThread(secondTask),NULL);
 	osKernelStart ();
-*/
+#endif
 	/* Infinite loop */
 	while (1) {
 #if 1
@@ -270,12 +271,51 @@ int __io_putchar(int ch) {
 }
 
 void printTask1 (void *argument) {
+    int rslt;
+    struct bmp280_dev bmp;
+    struct bmp280_config conf;
+    struct bmp280_uncomp_data ucomp_data;
+    int32_t temp = 0;
+    double alti = 0.0;
+    double pres;
+    MPU9250_gyro_val gyro;
+    MPU9250_accel_val accel;
+    MPU9250_magnetometer_val magn;
+
+    bmp.delay_ms = HAL_Delay;
+    bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
+    /* Select the interface mode as I2C */
+    bmp.intf = BMP280_I2C_INTF;
+
+    /* Map the I2C read & write function pointer with the functions responsible for I2C bus transfer */
+    bmp.read = I2C_Read;
+    bmp.write = I2C_Write;
+    rslt = bmp280_init(&bmp);
+    rslt = bmp280_get_config(&conf, &bmp);
+	conf.filter = BMP280_FILTER_COEFF_2;
+	conf.os_pres = BMP280_OS_2X;
+	conf.os_temp = BMP280_OS_2X;
+	conf.odr = BMP280_ODR_0_5_MS;
+	rslt = bmp280_set_config(&conf, &bmp);
+
+	/* Always set the power mode after setting the configuration */
+	rslt = bmp280_set_power_mode(BMP280_NORMAL_MODE, &bmp);
+	rslt = MPU9250_drv_init();
+	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
+
 	for (;;) {
-		SSD1306_Fill(SSD1306_COLOR_BLACK);
-		SSD1306_GotoXY(0, 0);
-		SSD1306_Puts("Task 1", &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_UpdateScreen();
-		vTaskDelay(1000);
+		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
+		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
+  		rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
+		MPU9250_drv_read_gyro(&gyro);
+		MPU9250_drv_read_accel(&accel);
+		MPU9250_drv_read_magnetometer(&magn);
+
+		alti = BME280_CalcTf(pres);
+		printf("$%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.2f %.2f %.2f\r\n",\
+				alti, pres/100,gyro.x,gyro.y,gyro.z,accel.x,accel.y,accel.z, magn.x, magn.y, magn.z);
+		vTaskDelay(20);
+
 	}
 	osThreadTerminate(NULL);
 }
