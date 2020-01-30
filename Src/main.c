@@ -39,11 +39,8 @@
 #include "bmp280.h"
 #include "MPU-9250.h"
 #include "math.h"
-#include "cmsis_os.h"
 #include <stdio.h>  /*rtt*/
 #include <stdlib.h> /*rtt*/
-#include "FreeRTOSConfig.h"
-#include "cmsis_os.h"
 
 /** @addtogroup STM32F0xx_HAL_Examples
  * @{
@@ -61,11 +58,6 @@
 static void SystemClock_Config(void);
 static void Error_Handler(void);
 double BME280_CalcTf(double pressure);
-osThreadId printHandle1;
-osThreadId printHandle2;
-
-void printTask1(void *argument);
-void printTask2(void *argument);
 
 /* Private functions ---------------------------------------------------------*/
 
@@ -74,8 +66,25 @@ void printTask2(void *argument);
  * @param  None
  * @retval None
  */
+#define HIGH_FREQ = 1600
+#define LOW_FREQ = 200
+
+#define HIGH_FREQ_PERIOD  (48000000/4)/1600
+#define LOW_FREQ_PERIOD  (48000000/4)/200
+extern __IO uint32_t uwTick;
+
 int main(void) {
 
+	uint32_t period = 0x9C40;
+	uint32_t timer_old = 0;
+	uint32_t timer_new = 0;
+	uint32_t timer = 0;
+
+	SimpleKalman kalman;
+	initKalman(&kalman);
+
+	altimeterHight altimeter;
+	double verticalSpeed;
 	/* STM32F0xx HAL library initialization:
 	 - Configure the Flash prefetch
 	 - Systick timer is configured by default as source of time base, but user
@@ -93,7 +102,7 @@ int main(void) {
 	USART_DBG_Init();
 	SSD1306_Init();
 	MX_I2C1_Init();
-//  X_TIM3_Init();
+    MX_TIM3_Init();
 
 	/* Add your application code here
 	 */
@@ -102,9 +111,10 @@ int main(void) {
     struct bmp280_dev bmp;
     struct bmp280_config conf;
     struct bmp280_uncomp_data ucomp_data;
+    char res [5];
     int32_t temp = 0;
     double alti = 0.0;
-    double pres;
+    double pres = 0.0;
     MPU9250_gyro_val gyro;
     MPU9250_accel_val accel;
     MPU9250_magnetometer_val magn;
@@ -125,6 +135,14 @@ int main(void) {
 	conf.odr = BMP280_ODR_0_5_MS;
 	rslt = bmp280_set_config(&conf, &bmp);
 
+	if (rslt == BMP280_OK) {
+		SSD1306_Puts("BMP280 Ok", &Font_7x10, SSD1306_COLOR_WHITE);
+	} else {
+		sprintf(res, "%d", rslt);
+		SSD1306_Puts(res, &Font_7x10, SSD1306_COLOR_WHITE);
+	}
+	SSD1306_UpdateScreen();
+	HAL_Delay(1000);
 	/* Always set the power mode after setting the configuration */
 	rslt = bmp280_set_power_mode(BMP280_NORMAL_MODE, &bmp);
 	SSD1306_GotoXY(0, 0);
@@ -156,25 +174,33 @@ int main(void) {
 	HAL_Delay(2000);
 	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
 #endif
-#if 0
-	osThreadDef(firstTask, printTask1, osPriorityHigh, 0, 300);
-	osThreadDef(secondTask, printTask2, osPriorityNormal, 0, 128);
-
-	osThreadCreate(osThread(firstTask),NULL);
-	osThreadCreate(osThread(secondTask),NULL);
-	osKernelStart ();
-#endif
 	/* Infinite loop */
+	alti = BME280_CalcTf(pres);
+	kalman.Eest = alti;
+	kalman.ESTt0 = alti;
 	while (1) {
 #if 1
 		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
 		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
-  		rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
+    	rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
 		MPU9250_drv_read_gyro(&gyro);
 		MPU9250_drv_read_accel(&accel);
-		MPU9250_drv_read_magnetometer(&magn);
-
+//		MPU9250_drv_read_magnetometer(&magn);
 		alti = BME280_CalcTf(pres);
+/*		float rounded = ((int)(alti * 100 + .5) / 100.0);
+		altimeter.actualHight = simpleKalman(&kalman,rounded);
+
+		timer_new = uwTick;
+		if (timer_new > timer_old) {
+			timer = timer_new - timer_old;
+		} else {
+			timer = timer_old - timer_new;
+		}
+		timer_old = timer_new;
+
+		verticalSpeed = getVerticalSpeed(&altimeter,timer);
+		*/
+
 /*
 		sprintf(cAlti, "%.1f", alti);
 		sprintf(cTemp, "%d", temp);
@@ -206,8 +232,22 @@ int main(void) {
 		SSD1306_Puts(cAccelZ, &Font_7x10, SSD1306_COLOR_WHITE);
 		SSD1306_UpdateScreen();
 		*/
-		printf("$%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.2f %.2f %.2f\r\n",\
-				alti, pres/100,gyro.x,gyro.y,gyro.z,accel.x,accel.y,accel.z, magn.x, magn.y, magn.z);
+		timer_new = uwTick;
+		if (timer_new > timer_old) {
+			timer = timer_new - timer_old;
+		} else {
+			timer = timer_old - timer_new;
+		}
+		timer_old = timer_new;
+		printf("$%.4f %d \r\n", alti, timer);
+//		printf("$%.2f %.2f %.4f %.4f %.4f %.4f %.4f %.4f at time %d\r\n",\
+				alti, pres/100,\
+				gyro.x,gyro.y,gyro.z, \
+				accel.x,accel.y,accel.z, \
+				timer);
+
+//		printf ("alti %.4f, verticalSpeed = %.4f \r\n", altimeter.actualHight, verticalSpeed);
+
 		bmp.delay_ms(20);
 //		printf("\033[36maltitude\033[0m = %f \033[36mtemp\033[0m = %d\r\n",alti,temp);
 #endif
@@ -270,65 +310,6 @@ int __io_putchar(int ch) {
 	return ch;
 }
 
-void printTask1 (void *argument) {
-    int rslt;
-    struct bmp280_dev bmp;
-    struct bmp280_config conf;
-    struct bmp280_uncomp_data ucomp_data;
-    int32_t temp = 0;
-    double alti = 0.0;
-    double pres;
-    MPU9250_gyro_val gyro;
-    MPU9250_accel_val accel;
-    MPU9250_magnetometer_val magn;
-
-    bmp.delay_ms = HAL_Delay;
-    bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
-    /* Select the interface mode as I2C */
-    bmp.intf = BMP280_I2C_INTF;
-
-    /* Map the I2C read & write function pointer with the functions responsible for I2C bus transfer */
-    bmp.read = I2C_Read;
-    bmp.write = I2C_Write;
-    rslt = bmp280_init(&bmp);
-    rslt = bmp280_get_config(&conf, &bmp);
-	conf.filter = BMP280_FILTER_COEFF_2;
-	conf.os_pres = BMP280_OS_2X;
-	conf.os_temp = BMP280_OS_2X;
-	conf.odr = BMP280_ODR_0_5_MS;
-	rslt = bmp280_set_config(&conf, &bmp);
-
-	/* Always set the power mode after setting the configuration */
-	rslt = bmp280_set_power_mode(BMP280_NORMAL_MODE, &bmp);
-	rslt = MPU9250_drv_init();
-	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
-
-	for (;;) {
-		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
-		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
-  		rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
-		MPU9250_drv_read_gyro(&gyro);
-		MPU9250_drv_read_accel(&accel);
-		MPU9250_drv_read_magnetometer(&magn);
-
-		alti = BME280_CalcTf(pres);
-		printf("$%.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.2f %.2f %.2f\r\n",\
-				alti, pres/100,gyro.x,gyro.y,gyro.z,accel.x,accel.y,accel.z, magn.x, magn.y, magn.z);
-		vTaskDelay(20);
-
-	}
-	osThreadTerminate(NULL);
-}
-void printTask2 (void *argument) {
-	for (;;) {
-		SSD1306_Fill(SSD1306_COLOR_BLACK);
-		SSD1306_GotoXY(0, 0);
-		SSD1306_Puts("Task 2", &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_UpdateScreen();
-		vTaskDelay(1000);
-	}
-	osThreadTerminate(NULL);
-}
 
 #ifdef  USE_FULL_ASSERT
 

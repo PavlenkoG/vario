@@ -41,3 +41,11 @@ void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim) {
 	HAL_GPIO_Init(GPIOC,&GPIO_InitStruct);
 }
 
+void TimStart (TIM_HandleTypeDef *timer, uint32_t period) {
+	timer->Instance->ARR = period;
+	timer->Instance->CCR1 = period >> 1;
+}
+
+void TimStop (void) {
+	HAL_TIM_PWM_Stop(&tim3,TIM_CHANNEL_1);
+}

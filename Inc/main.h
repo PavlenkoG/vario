@@ -41,6 +41,9 @@
 #include "stm32f0xx_hal.h"
 #include "uart.h"
 #include "i2c.h"
+#include "tim.h"
+#include "varioTone.h"
+#include "altimeter.h"
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/

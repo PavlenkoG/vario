@@ -162,9 +162,9 @@ if (hi2c->Instance == I2C2) {
 int8_t I2C_Read(uint8_t device_addr, uint8_t register_addr, uint8_t* rdata, uint8_t len) {
 
     uint8_t status = 0;
-    status = HAL_I2C_Mem_Read(&hi2c1, (uint8_t) device_addr,
-            (uint8_t) register_addr, 1, (uint8_t*) rdata, (uint8_t) len, 100);
-    return (int8_t) status;
+    status = HAL_I2C_Mem_Read(&hi2c1,  device_addr,
+             register_addr, 1,  rdata,  len, 100);
+    return  status;
 
 }
 int8_t I2C_Write(uint8_t device_addr, uint8_t register_addr, uint8_t* rdata, uint8_t len) {
