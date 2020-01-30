@@ -44,6 +44,7 @@
 #include "tim.h"
 #include "varioTone.h"
 #include "altimeter.h"
+#include "bmp280.h"
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/

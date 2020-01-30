@@ -71,9 +71,27 @@ double BME280_CalcTf(double pressure);
 
 #define HIGH_FREQ_PERIOD  (48000000/4)/1600
 #define LOW_FREQ_PERIOD  (48000000/4)/200
+#define ALTITUDE_SAMPLES_FILTER 20
 extern __IO uint32_t uwTick;
 
 int main(void) {
+
+    int rslt;
+    uint8_t bmp280Period;
+    struct bmp280_dev bmp;
+    struct bmp280_config conf;
+    struct bmp280_uncomp_data ucomp_data;
+    struct bmp280_status bmpStatus;
+    int32_t temp = 0;
+    double alti = 0.0;
+    double altiVector[ALTITUDE_SAMPLES_FILTER] = {0};
+    double averageSpeed = 0.0;
+    double averageAlti = 0.0;
+    uint8_t arrayIndex = 0;
+    double pres = 0.0;
+    MPU9250_gyro_val gyro;
+    MPU9250_accel_val accel;
+    MPU9250_magnetometer_val magn;
 
 	uint32_t period = 0x9C40;
 	uint32_t timer_old = 0;
@@ -85,39 +103,16 @@ int main(void) {
 
 	altimeterHight altimeter;
 	double verticalSpeed;
-	/* STM32F0xx HAL library initialization:
-	 - Configure the Flash prefetch
-	 - Systick timer is configured by default as source of time base, but user
-	 can eventually implement his proper time base source (a general purpose
-	 timer for example or other time source), keeping in mind that Time base
-	 duration should be kept 1ms since PPP_TIMEOUT_VALUEs are defined and
-	 handled in milliseconds basis.
-	 - Low Level Initialization
-	 */
+
 	HAL_Init();
 
 	/* Configure the system clock to have a system clock = 48 Mhz */
 	SystemClock_Config();
 
 	USART_DBG_Init();
-	SSD1306_Init();
+//	SSD1306_Init();
 	MX_I2C1_Init();
     MX_TIM3_Init();
-
-	/* Add your application code here
-	 */
-#if 1
-    int rslt;
-    struct bmp280_dev bmp;
-    struct bmp280_config conf;
-    struct bmp280_uncomp_data ucomp_data;
-    char res [5];
-    int32_t temp = 0;
-    double alti = 0.0;
-    double pres = 0.0;
-    MPU9250_gyro_val gyro;
-    MPU9250_accel_val accel;
-    MPU9250_magnetometer_val magn;
 
     bmp.delay_ms = HAL_Delay;
     bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
@@ -131,126 +126,70 @@ int main(void) {
     rslt = bmp280_get_config(&conf, &bmp);
 	conf.filter = BMP280_FILTER_COEFF_2;
 	conf.os_pres = BMP280_OS_2X;
-	conf.os_temp = BMP280_OS_2X;
+	conf.os_temp = BMP280_OS_1X;
 	conf.odr = BMP280_ODR_0_5_MS;
 	rslt = bmp280_set_config(&conf, &bmp);
 
-	if (rslt == BMP280_OK) {
-		SSD1306_Puts("BMP280 Ok", &Font_7x10, SSD1306_COLOR_WHITE);
-	} else {
-		sprintf(res, "%d", rslt);
-		SSD1306_Puts(res, &Font_7x10, SSD1306_COLOR_WHITE);
-	}
-	SSD1306_UpdateScreen();
-	HAL_Delay(1000);
-	/* Always set the power mode after setting the configuration */
-	rslt = bmp280_set_power_mode(BMP280_NORMAL_MODE, &bmp);
-	SSD1306_GotoXY(0, 0);
-	char cAlti[12];
-	char cTemp[12];
-	char cPress[12];
-	char cGyroX[12];
-	char cGyroY[12];
-	char cGyroZ[12];
-	char cAccelX[12];
-	char cAccelY[12];
-	char cAccelZ[12];
-	SSD1306_UpdateScreen();
+//	rslt = MPU9250_drv_init();
 
-	rslt = MPU9250_drv_init();
-	if (rslt == MPU9250_OK) {
-		SSD1306_Puts("MPU9250 Ok", &Font_7x10, SSD1306_COLOR_WHITE);
+	if (rslt == BMP280_OK) {
+		printf("Pressure sensor OK\r\n");
+	} else {
+		printf("Error by pressure sensor init\r\n");
 	}
-	if (rslt == MPU9250_NOT_FOUND) {
-		SSD1306_Puts("MPU9250 Not found", &Font_7x10, SSD1306_COLOR_WHITE);
-	}
-	if (rslt == MPU9250_INIT_ERROR) {
-		SSD1306_Puts("MPU9250 Init Err", &Font_7x10, SSD1306_COLOR_WHITE);
-	}
-	if (rslt == AK8963_INIT_ERROR) {
-		SSD1306_Puts("AK8963 Not found", &Font_7x10, SSD1306_COLOR_WHITE);
-	}
-	SSD1306_UpdateScreen();
-	HAL_Delay(2000);
-	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
-#endif
+
+	bmp280Period = bmp280_compute_meas_time(&bmp);
+	printf ("Pressure sensor period = %d\r\n",bmp280Period);
+	bmp280_set_power_mode(BMP280_NORMAL_MODE,&bmp);
+
+//	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
+
 	/* Infinite loop */
+	rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
+	rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
 	alti = BME280_CalcTf(pres);
 	kalman.Eest = alti;
 	kalman.ESTt0 = alti;
+
+	while (!bmpStatus.im_update){
+		bmp280Period = bmp280_get_status(&bmpStatus, &bmp);
+	}
+
+
+
+	timer_new = uwTick;
 	while (1) {
-#if 1
 		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
 		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
     	rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
-		MPU9250_drv_read_gyro(&gyro);
-		MPU9250_drv_read_accel(&accel);
-//		MPU9250_drv_read_magnetometer(&magn);
-		alti = BME280_CalcTf(pres);
-/*		float rounded = ((int)(alti * 100 + .5) / 100.0);
-		altimeter.actualHight = simpleKalman(&kalman,rounded);
+//		MPU9250_drv_read_gyro(&gyro);
+//		MPU9250_drv_read_accel(&accel);
 
-		timer_new = uwTick;
-		if (timer_new > timer_old) {
-			timer = timer_new - timer_old;
+//		alti = BME280_CalcTf(pres);
+		alti = simpleKalman(&kalman,BME280_CalcTf(pres));
+
+		if (arrayIndex < ALTITUDE_SAMPLES_FILTER) {
+			arrayIndex ++;
+			averageAlti = averageAlti + alti;
 		} else {
-			timer = timer_old - timer_new;
+			averageAlti = averageAlti/ALTITUDE_SAMPLES_FILTER;
+			if (timer) {
+				averageSpeed = (alti - averageAlti)/(timer);
+			}
+			timer_new = uwTick;
+			if (timer_new > timer_old) {
+				timer = timer_new - timer_old;
+			} else {
+				timer = timer_old - timer_new;
+			}
+			timer_old = timer_new;
+			printf("$%.4f %d \r\n", averageSpeed*100, timer);
+			arrayIndex = 0;
+			averageAlti = 0.0;
 		}
-		timer_old = timer_new;
 
-		verticalSpeed = getVerticalSpeed(&altimeter,timer);
-		*/
 
-/*
-		sprintf(cAlti, "%.1f", alti);
-		sprintf(cTemp, "%d", temp);
-		sprintf(cPress, "%.3f", pres/100);
-		sprintf(cGyroX, "%.3f", gyro.x);
-		sprintf(cGyroY, "%.3f", gyro.y);
-		sprintf(cGyroZ, "%.3f", gyro.z);
-		sprintf(cAccelX, "%.3f", accel.x);
-		sprintf(cAccelY, "%.3f", accel.y);
-		sprintf(cAccelZ, "%.3f", accel.z);
-		SSD1306_Fill(SSD1306_COLOR_BLACK);
-		SSD1306_GotoXY(0, 0);
-		SSD1306_Puts(cAlti, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(0, 8);
-		SSD1306_Puts(cTemp, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(0, 16);
-		SSD1306_Puts(cPress, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(0, 24);
-		SSD1306_Puts(cGyroX, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(64, 24);
-		SSD1306_Puts(cAccelX, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(0, 32);
-		SSD1306_Puts(cGyroY, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(64, 32);
-		SSD1306_Puts(cAccelY, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(0, 40);
-		SSD1306_Puts(cGyroZ, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_GotoXY(64, 40);
-		SSD1306_Puts(cAccelZ, &Font_7x10, SSD1306_COLOR_WHITE);
-		SSD1306_UpdateScreen();
-		*/
-		timer_new = uwTick;
-		if (timer_new > timer_old) {
-			timer = timer_new - timer_old;
-		} else {
-			timer = timer_old - timer_new;
-		}
-		timer_old = timer_new;
-		printf("$%.4f %d \r\n", alti, timer);
-//		printf("$%.2f %.2f %.4f %.4f %.4f %.4f %.4f %.4f at time %d\r\n",\
-				alti, pres/100,\
-				gyro.x,gyro.y,gyro.z, \
-				accel.x,accel.y,accel.z, \
-				timer);
-
-//		printf ("alti %.4f, verticalSpeed = %.4f \r\n", altimeter.actualHight, verticalSpeed);
-
-		bmp.delay_ms(20);
-//		printf("\033[36maltitude\033[0m = %f \033[36mtemp\033[0m = %d\r\n",alti,temp);
-#endif
+		HAL_Delay(10);
 	}
 }
 

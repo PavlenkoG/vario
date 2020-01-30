@@ -120,6 +120,7 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c) {
 
 		/* USER CODE END I2C2_MspInit 1 */
 	}
+
 	if(hi2c->Instance==I2C1) {
 		/**I2C2 GPIO Configuration
 		 PB8      ------> I2C2_SCL
