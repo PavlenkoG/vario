@@ -17,11 +17,17 @@ struct varioTone {
     uint32_t        toneFreq;
     uint32_t        cycle;
     uint32_t        toneDutyCycle;
+    double			averageSpeed;
 };
 
 
 void getVarioTone(double climbSpeed, struct varioTone* tone);
 double getVarioSpeed (uint8_t index);
+
+uint32_t onTime (struct varioTone* tone);
+uint32_t offTime (struct varioTone* tone);
+uint32_t getCycle (struct varioTone* tone);
+uint32_t getDutyCycle (struct varioTone* tone);
 
 
 #endif /* DRIVERS_VARIOTONE_VARIOTONE_H_ */

@@ -2,8 +2,8 @@
 
 void initKalman (SimpleKalman *kalman) {
 	kalman->KG = 0.0;
-	kalman->Emea = 0.7;
-	kalman->Eest = 0.01;
+	kalman->Emea = 0.5;
+	kalman->Eest = 0.05;
 	kalman->ESTt = 0;
 	kalman->ESTt0 = 0;
 }

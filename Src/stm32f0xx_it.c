@@ -49,6 +49,7 @@
   * @{
   */
 extern DMA_HandleTypeDef hdma_i2c2_tx;
+extern TIM_HandleTypeDef tim2;
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -139,6 +140,11 @@ void DMA1_Ch4_7_DMA2_Ch3_5_IRQHandler(void)
 void I2C2_IRQHandler (void)
 {
 	HAL_I2C_EV_IRQHandler(&hi2c2);
+}
+
+void TIM2_IRQHandler(void)
+{
+	HAL_TIM_IRQHandler(&tim2);
 }
 /**
   * @}

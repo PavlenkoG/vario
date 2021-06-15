@@ -71,8 +71,10 @@ double BME280_CalcTf(double pressure);
 
 #define HIGH_FREQ_PERIOD  (48000000/4)/1600
 #define LOW_FREQ_PERIOD  (48000000/4)/200
-#define ALTITUDE_SAMPLES_FILTER 20
+#define ALTITUDE_SAMPLES_FILTER 10
 extern __IO uint32_t uwTick;
+
+struct varioTone tone;
 
 int main(void) {
 
@@ -86,7 +88,9 @@ int main(void) {
     double alti = 0.0;
     double altiVector[ALTITUDE_SAMPLES_FILTER] = {0};
     double averageSpeed = 0.0;
+    double speed = 0.0;
     double averageAlti = 0.0;
+    double averageAltiOld = 0.0;
     uint8_t arrayIndex = 0;
     double pres = 0.0;
     MPU9250_gyro_val gyro;
@@ -97,7 +101,9 @@ int main(void) {
 	uint32_t timer_old = 0;
 	uint32_t timer_new = 0;
 	uint32_t timer = 0;
-
+	tone.averageSpeed = 0.0;
+	tone.cycle = 700;
+	tone.toneDutyCycle = 50;
 	SimpleKalman kalman;
 	initKalman(&kalman);
 
@@ -113,6 +119,7 @@ int main(void) {
 //	SSD1306_Init();
 	MX_I2C1_Init();
     MX_TIM3_Init();
+    MX_TIM2_Init();
 
     bmp.delay_ms = HAL_Delay;
     bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
@@ -144,19 +151,21 @@ int main(void) {
 
 //	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
 
-	/* Infinite loop */
+	alti = BME280_CalcTf(pres);
+	HAL_Delay(1000);
 	rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
 	rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
 	alti = BME280_CalcTf(pres);
-	kalman.Eest = alti;
-	kalman.ESTt0 = alti;
+//kalman.Eest = alti;
+    kalman.ESTt0 = 0.0;
+    kalman.ESTt = 0.0;
 
 	while (!bmpStatus.im_update){
 		bmp280Period = bmp280_get_status(&bmpStatus, &bmp);
 	}
 
 
-
+	averageAltiOld = alti;
 	timer_new = uwTick;
 	while (1) {
 		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
@@ -166,15 +175,18 @@ int main(void) {
 //		MPU9250_drv_read_accel(&accel);
 
 //		alti = BME280_CalcTf(pres);
-		alti = simpleKalman(&kalman,BME280_CalcTf(pres));
 
+		alti = BME280_CalcTf(pres);
+//		alti = simpleKalman(&kalman,BME280_CalcTf(pres));
 		if (arrayIndex < ALTITUDE_SAMPLES_FILTER) {
 			arrayIndex ++;
 			averageAlti = averageAlti + alti;
 		} else {
 			averageAlti = averageAlti/ALTITUDE_SAMPLES_FILTER;
 			if (timer) {
-				averageSpeed = (alti - averageAlti)/(timer);
+				speed = (averageAlti - averageAltiOld)/((double)timer /1000);
+				averageSpeed = simpleKalman(&kalman,speed);
+				tone.averageSpeed = averageSpeed;
 			}
 			timer_new = uwTick;
 			if (timer_new > timer_old) {
@@ -183,12 +195,20 @@ int main(void) {
 				timer = timer_old - timer_new;
 			}
 			timer_old = timer_new;
-			printf("$%.4f %d \r\n", averageSpeed*100, timer);
+
+			//printf("$%.4f %f \r\n", averageSpeed, averageAlti);
+			getVarioTone(averageSpeed, &tone);
 			arrayIndex = 0;
+			averageAltiOld = averageAlti;
 			averageAlti = 0.0;
 		}
 
-
+		/*
+		if (averageSpeed > 0.2)
+			TimStart(&tim3,(12000000/tone.toneFreq));
+		else
+			TimStop();
+		*/
 		HAL_Delay(10);
 	}
 }

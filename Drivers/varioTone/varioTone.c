@@ -21,12 +21,12 @@ uint32_t varioFreq[VARIO_TABLE_SIZE] = {
 // vario cycle in ms
 uint32_t varioCycle[VARIO_TABLE_SIZE] = {
 //      0   1   2   3   4   5   6   7   8   9    10   11   12  13  14
-        10, 10, 10, 10, 10, 10, 10, 10, 10, 325, 225, 125, 90, 70, 50
+        10, 10, 10, 10, 10, 10, 10, 10, 300, 300, 300, 125, 90, 70, 50
 };
 // vario duty cycle in %
 uint8_t varioDuty[VARIO_TABLE_SIZE] = {
 //      0    1    2    3    4    5    6    7    8    9   10  11  12  13  14
-        100, 100, 100, 100, 100, 100, 100, 100, 100, 50, 50, 50, 50, 50, 50
+        100, 100, 100, 100, 100, 100, 10,  20,  30,  50, 50, 50, 50, 50, 50
 };
 
 void getVarioTone(double climbSpeed, struct varioTone* tone) {
@@ -84,4 +84,17 @@ void getVarioTone(double climbSpeed, struct varioTone* tone) {
 
 double getVarioSpeed (uint8_t index) {
     return varioSpeed[index];
+}
+
+uint32_t onTime (struct varioTone* tone) {
+	return (((48000000/4*0.001) * tone->cycle)/100) * tone->toneDutyCycle;
+}
+uint32_t offTime (struct varioTone * tone) {
+	return getCycle - onTime(&tone);
+}
+uint32_t getCycle (struct varioTone* tone) {
+	return (48000000/4*0.001) * tone->cycle;
+}
+uint32_t getDutyCycle (struct varioTone* tone) {
+	return tone->toneDutyCycle;
 }
