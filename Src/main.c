@@ -110,16 +110,22 @@ int main(void) {
 	altimeterHight altimeter;
 	double verticalSpeed;
 
+	uint8_t buttonPressed = 0;
+	uint8_t soundOnOff = 0;
+	uint8_t soundCounter = 0;
+
 	HAL_Init();
 
 	/* Configure the system clock to have a system clock = 48 Mhz */
 	SystemClock_Config();
 
 	USART_DBG_Init();
-//	SSD1306_Init();
+  	SSD1306_Init();
 	MX_I2C1_Init();
     MX_TIM3_Init();
     MX_TIM2_Init();
+    MX_TIM17_Init();
+    initLedButton();
 
     bmp.delay_ms = HAL_Delay;
     bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
@@ -197,12 +203,32 @@ int main(void) {
 			timer_old = timer_new;
 
 			//printf("$%.4f %f \r\n", averageSpeed, averageAlti);
+			/*
 			getVarioTone(averageSpeed, &tone);
 			arrayIndex = 0;
 			averageAltiOld = averageAlti;
 			averageAlti = 0.0;
+			*/
 		}
 
+		if (HAL_GPIO_ReadPin(USER_LED_PORT, USER_LED_PIN)) {
+			if (buttonPressed == 0) {
+				buttonPressed = 1;
+				TimStart(&tim3,(12000000/tone.toneFreq));
+				soundCounter ++;
+			}
+		} else {
+			buttonPressed = 0;
+			TimStop();
+		}
+
+    	char sPres[8];
+		sprintf(sPres, "%x", pres);
+
+		printf("PRS %x\n",pres);
+		SSD1306_GotoXY(0,0);
+		SSD1306_Puts(sPres,&Font_7x10,1);
+		SSD1306_UpdateScreen();
 		/*
 		if (averageSpeed > 0.2)
 			TimStart(&tim3,(12000000/tone.toneFreq));

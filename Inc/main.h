@@ -45,6 +45,7 @@
 #include "varioTone.h"
 #include "altimeter.h"
 #include "bmp280.h"
+#include "gpio.h"
 
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
