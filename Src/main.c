@@ -177,28 +177,11 @@ int main(void) {
 	//TimStart(&tim3,(12000000/tone.toneFreq));
 	while (1) {
 		if (HAL_GPIO_ReadPin(USER_LED_PORT, USER_LED_PIN)) {
+			getVarioTone(soundCounter, &tone);
 			//if (!(tim2.Instance->CR1 & TIM_CR1_CEN)) {
 			if (!buttonPressed) {
 				buttonPressed = 1;
-				if (soundCounter < 10.0) {
-					soundCounter += 0.1;
-				} else {
-					soundCounter = -9;
-				}
-				getVarioTone(soundCounter, &tone);
 				HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
-				//HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
-
-				/*
-				printf("vario %f\r\n", soundCounter);//tone.toneFreq);
-				printf("freq %d\r\n", tone.toneFreq);
-				printf("cycl %d\r\n", tone.cycle);
-				printf("dutycycl %d\r\n", tone.toneDutyCycle);
-
-				printf("cycl t %d\r\n", getCycle(&tone));
-				printf("on t %d\r\n", onTime(&tone));
-				printf("off t %d\r\n", offTime(&tone));
-				*/
 			}
 		} else {
 			buttonPressed = 0;
@@ -206,6 +189,11 @@ int main(void) {
 				HAL_TIM_OC_Stop(&tim2, TIM_CHANNEL_1);
 				HAL_TIM_PWM_Stop(&tim3, TIM_CHANNEL_1);
 			}
+		}
+		if (soundCounter < 10.0) {
+			soundCounter += 0.1;
+		} else {
+			soundCounter = -9;
 		}
 
     	char sCnt[8];
@@ -236,7 +224,7 @@ int main(void) {
 		else
 			TimStop();
 		*/
-		HAL_Delay(10);
+		HAL_Delay(1000);
 	}
 }
 
