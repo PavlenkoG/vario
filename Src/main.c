@@ -112,7 +112,7 @@ int main(void) {
 
 	uint8_t buttonPressed = 0;
 	uint8_t soundOnOff = 0;
-	uint8_t soundCounter = 0;
+	double soundCounter = 0.0;
 
 	HAL_Init();
 
@@ -170,68 +170,67 @@ int main(void) {
 		bmp280Period = bmp280_get_status(&bmpStatus, &bmp);
 	}
 
+	HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
 
-	averageAltiOld = alti;
-	timer_new = uwTick;
+	//TimStart(&tim3,(12000000/tone.toneFreq));
 	while (1) {
-		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
-		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
-    	rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
-//		MPU9250_drv_read_gyro(&gyro);
-//		MPU9250_drv_read_accel(&accel);
-
-//		alti = BME280_CalcTf(pres);
-
-		alti = BME280_CalcTf(pres);
-//		alti = simpleKalman(&kalman,BME280_CalcTf(pres));
-		if (arrayIndex < ALTITUDE_SAMPLES_FILTER) {
-			arrayIndex ++;
-			averageAlti = averageAlti + alti;
-		} else {
-			averageAlti = averageAlti/ALTITUDE_SAMPLES_FILTER;
-			if (timer) {
-				speed = (averageAlti - averageAltiOld)/((double)timer /1000);
-				averageSpeed = simpleKalman(&kalman,speed);
-				tone.averageSpeed = averageSpeed;
-			}
-			timer_new = uwTick;
-			if (timer_new > timer_old) {
-				timer = timer_new - timer_old;
-			} else {
-				timer = timer_old - timer_new;
-			}
-			timer_old = timer_new;
-
-			//printf("$%.4f %f \r\n", averageSpeed, averageAlti);
-			/*
-			getVarioTone(averageSpeed, &tone);
-			arrayIndex = 0;
-			averageAltiOld = averageAlti;
-			averageAlti = 0.0;
-			*/
-		}
-
 		if (HAL_GPIO_ReadPin(USER_LED_PORT, USER_LED_PIN)) {
-			if (buttonPressed == 0) {
+			//if (!(tim2.Instance->CR1 & TIM_CR1_CEN)) {
+			if (!buttonPressed) {
 				buttonPressed = 1;
-				TimStart(&tim3,(12000000/tone.toneFreq));
-				soundCounter ++;
+				if (soundCounter < 10.0) {
+					soundCounter += 1.0;
+				} else {
+					soundCounter = -9;
+				}
+				getVarioTone(soundCounter, &tone);
+				HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
+				HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
+
+				/*
+				printf("vario %f\r\n", soundCounter);//tone.toneFreq);
+				printf("freq %d\r\n", tone.toneFreq);
+				printf("cycl %d\r\n", tone.cycle);
+				printf("dutycycl %d\r\n", tone.toneDutyCycle);
+
+				printf("cycl t %d\r\n", getCycle(&tone));
+				printf("on t %d\r\n", onTime(&tone));
+				printf("off t %d\r\n", offTime(&tone));
+				*/
 			}
 		} else {
 			buttonPressed = 0;
-			TimStop();
+			if (tim2.Instance->CR1 & TIM_CR1_CEN) {
+				HAL_TIM_OC_Stop(&tim2, TIM_CHANNEL_1);
+				HAL_TIM_PWM_Stop(&tim3, TIM_CHANNEL_1);
+			}
 		}
 
-    	char sPres[8];
-		sprintf(sPres, "%x", pres);
+    	char sCnt[8];
+    	char sFrq[8];
+    	char sCycl[8];
+    	char sOn[8];
+    	char sOff[8];
 
-		printf("PRS %x\n",pres);
+    	/*
+		sprintf(sCnt, "vario %f", soundCounter);//tone.toneFreq);
+		sprintf(sFrq, "freq %d", tone.toneFreq);
+		sprintf(sCycl, "cycl %d", tone.cycle);
+		sprintf(sOn, "on t %d", onTime(&tone));
+		sprintf(sOff, "off t %d", offTime(&tone));
+
 		SSD1306_GotoXY(0,0);
-		SSD1306_Puts(sPres,&Font_7x10,1);
+		SSD1306_Puts(sCnt,&Font_7x10,1);
 		SSD1306_UpdateScreen();
+		SSD1306_GotoXY(0,10);
+		SSD1306_Puts(sFrq,&Font_7x10,1);
+		SSD1306_UpdateScreen();
+		SSD1306_GotoXY(0,20);
+		SSD1306_Puts(sCycl,&Font_7x10,1);
+		SSD1306_UpdateScreen();
+		*/
 		/*
 		if (averageSpeed > 0.2)
-			TimStart(&tim3,(12000000/tone.toneFreq));
 		else
 			TimStop();
 		*/
