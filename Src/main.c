@@ -112,7 +112,7 @@ int main(void) {
 
 	uint8_t buttonPressed = 0;
 	uint8_t soundOnOff = 0;
-	double soundCounter = 0.0;
+	double soundCounter = -1.7;
 
 	HAL_Init();
 
@@ -150,6 +150,8 @@ int main(void) {
 	} else {
 		printf("Error by pressure sensor init\r\n");
 	}
+	printf("HCLK = %d Hz\r\n", HAL_RCC_GetHCLKFreq());
+	printf("PCLK = %d Hz\r\n", HAL_RCC_GetPCLK1Freq());
 
 	bmp280Period = bmp280_compute_meas_time(&bmp);
 	printf ("Pressure sensor period = %d\r\n",bmp280Period);
@@ -179,13 +181,13 @@ int main(void) {
 			if (!buttonPressed) {
 				buttonPressed = 1;
 				if (soundCounter < 10.0) {
-					soundCounter += 1.0;
+					soundCounter += 0.1;
 				} else {
 					soundCounter = -9;
 				}
 				getVarioTone(soundCounter, &tone);
 				HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
-				HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
+				//HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
 
 				/*
 				printf("vario %f\r\n", soundCounter);//tone.toneFreq);

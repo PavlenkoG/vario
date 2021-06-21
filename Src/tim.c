@@ -8,7 +8,6 @@ TIM_HandleTypeDef tim3;
 TIM_HandleTypeDef tim17;
 
 TIM_OC_InitTypeDef sConfig;
-TIM_OC_InitTypeDef sConfig17;
 uint8_t onOff;
 
 extern struct varioTone tone;
@@ -42,24 +41,15 @@ void MX_TIM2_Init (void) {
 	// TIMER2 for periodical sound
 	__HAL_RCC_TIM2_CLK_ENABLE();
 	onOff = 0;
+
 	tim2.Instance = TIM2;
-	tim2.Init.Prescaler = 3;
-	tim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-	tim2.Init.CounterMode = TIM_COUNTERMODE_UP;
-	tim2.Init.RepetitionCounter = 0;
-	tim2.Init.AutoReloadPreload = TIM_AUTOMATICOUTPUT_ENABLE;
 
-	sConfig.OCMode = TIM_OCMODE_TIMING;
-	sConfig.OCPolarity   = TIM_OCPOLARITY_HIGH;
-	sConfig.OCNPolarity  = TIM_OCNPOLARITY_HIGH;
-
-	sConfig.Pulse = 0x2EE0;
-	TIM_BaseStruct.AutoReloadPreload = getCycle(&tone);
-	TIM_BaseStruct.Period = getCycle(&tone);
+	TIM_BaseStruct.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+	TIM_BaseStruct.Period = 100;
 	TIM_BaseStruct.Prescaler = 3;
+	TIM_BaseStruct.CounterMode = TIM_COUNTERMODE_UP;
 
 	TIM_Base_SetConfig(TIM2, &TIM_BaseStruct);
-	HAL_TIM_OC_ConfigChannel(&tim2, &sConfig, TIM_CHANNEL_1);
 
 	HAL_NVIC_SetPriority(TIM2_IRQn, 3, 0);
 	HAL_NVIC_EnableIRQ(TIM2_IRQn);
@@ -113,27 +103,30 @@ void TimStart (uint32_t period) {
 	HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
 }
 
+void setPwmFreq (uint32_t period) {
+	__HAL_TIM_SET_AUTORELOAD(&tim3, period);
+	__HAL_TIM_SET_COMPARE(&tim3,TIM_CHANNEL_1, period>>1);
+}
+
 void TimStop (void) {
 	HAL_TIM_PWM_Stop(&tim3,TIM_CHANNEL_1);
 }
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2) {
-		HAL_TIM_OC_Stop(&tim2, TIM_CHANNEL_1);
+		//HAL_TIM_OC_Stop(&tim2, TIM_CHANNEL_1);
 		struct timerSound timersound = getTimerSoundConfig(&tone);
 		if (!onOff) {
-			uint32_t onT = onTime(&tone);
 			__HAL_TIM_SET_COMPARE(htim,TIM_CHANNEL_1, timersound.onCount);
 			__HAL_TIM_SET_AUTORELOAD(htim, timersound.onCount);
-			HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
+			//HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
 			TimStart(12000000/tone.toneFreq);
 			onOff = 1;
 		}
 		else {
-			uint32_t offT = offTime(&tone);
 			if (timersound.offCount) {
 				__HAL_TIM_SET_COMPARE(htim,TIM_CHANNEL_1, timersound.offCount);
 				__HAL_TIM_SET_AUTORELOAD(htim, timersound.offCount);
-				HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
+				//HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
 				TimStop();
 			}
 			onOff = 0;

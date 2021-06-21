@@ -27,15 +27,15 @@ struct timerSound {
 };
 
 
-void getVarioTone(double climbSpeed, struct varioTone* tone);
+void getVarioTone(double climbSpeed, struct varioTone* pTone);
 double getVarioSpeed (uint8_t index);
 uint32_t getLinearInterpolation (uint32_t *calcArray, uint8_t index, double speed);
-struct timerSound getTimerSoundConfig (struct varioTone* tone);
+struct timerSound getTimerSoundConfig (struct varioTone* pTone);
 
-uint32_t onTime (struct varioTone* tone);
-uint32_t offTime (struct varioTone* tone);
-uint32_t getCycle (struct varioTone* tone);
-uint32_t getDutyCycle (struct varioTone* tone);
+uint32_t onTime (struct varioTone* pTone);
+uint32_t offTime (struct varioTone* pTone);
+uint32_t getCycle (struct varioTone* pTone);
+uint32_t getDutyCycle (struct varioTone* pTone);
 
 
 #endif /* DRIVERS_VARIOTONE_VARIOTONE_H_ */

@@ -20,31 +20,32 @@ uint32_t varioFreq[VARIO_TABLE_SIZE] = {
 };
 // vario cycle in ms
 uint32_t varioCycle[VARIO_TABLE_SIZE] = {
-//      0    1    2    3    4    5    6    7    8    9    10   11   12   13   14
-        100, 100, 100, 100, 100, 100, 100, 1000, 800, 500, 450, 300, 350, 200, 150
+//      0    1    2    3    4     5     6     7     8    9    10   11   12   13   14
+        100, 100, 100, 100, 3000, 2000, 1500, 1000, 800, 500, 450, 400, 350, 200, 150
+//		1000,1000,1000,1000,1000, 1000, 1000, 1000, 1000,1000,1000,1000,1000,1000,1000
 };
 // vario duty cycle in %
 uint32_t varioDuty[VARIO_TABLE_SIZE] = {
 //      0    1    2    3    4    5  6   7    8    9   10  11  12  13  14
-        100, 100, 100, 95, 90, 80, 10,  20,  50,  55, 60, 63, 65, 68, 70
+        100, 100, 100, 100, 10, 15, 20, 25,  50,  55, 60, 63, 65, 68, 70
 };
 
 
-void getVarioTone(double climbSpeed, struct varioTone* tone) {
+void getVarioTone(double climbSpeed, struct varioTone* pTone) {
     uint8_t index = 0;
     double offsetPercent = 0.0;
 
     uint32_t toneFreq = 0;
     // find the table index
     if (climbSpeed <= varioSpeed[0]) {
-        tone->toneFreq = varioFreq[0];
-        tone->cycle = varioCycle[0];
-        tone->toneDutyCycle = varioDuty[0];
+        pTone->toneFreq = varioFreq[0];
+        pTone->cycle = varioCycle[0];
+        pTone->toneDutyCycle = varioDuty[0];
     }
     if (climbSpeed >= varioSpeed[VARIO_TABLE_SIZE-1]) {
-        tone->toneFreq = varioFreq[VARIO_TABLE_SIZE-1];
-        tone->cycle = varioCycle[VARIO_TABLE_SIZE-1];
-        tone->toneDutyCycle = varioDuty[VARIO_TABLE_SIZE-1];
+        pTone->toneFreq = varioFreq[VARIO_TABLE_SIZE-1];
+        pTone->cycle = varioCycle[VARIO_TABLE_SIZE-1];
+        pTone->toneDutyCycle = varioDuty[VARIO_TABLE_SIZE-1];
     }
     //sarching for current table index
     if (climbSpeed > varioSpeed[0]&&climbSpeed <varioSpeed[VARIO_TABLE_SIZE-1]) {
@@ -54,26 +55,28 @@ void getVarioTone(double climbSpeed, struct varioTone* tone) {
     }
     if (index && index < VARIO_TABLE_SIZE) {
         // tone frequency calculation
-        tone->toneFreq = getLinearInterpolation(&varioFreq[0], index, climbSpeed);
+        pTone->toneFreq = getLinearInterpolation(&varioFreq[0], index, climbSpeed);
 
         // cycle calculation
-        tone->cycle = getLinearInterpolation(&varioCycle[0], index, climbSpeed);
+        pTone->cycle = getLinearInterpolation(&varioCycle[0], index, climbSpeed);
 
         // duty cycle calculation
-        tone->toneDutyCycle = getLinearInterpolation(&varioDuty[0], index, climbSpeed);
+        pTone->toneDutyCycle = getLinearInterpolation(&varioDuty[0], index, climbSpeed);
 
     }
-    printf("index = %d; speed = %f; freq = %d; cycle = %d; duty = %d\r\n",index, climbSpeed,  tone->toneFreq, tone->cycle, tone->toneDutyCycle);
+    printf("index = %d; speed = %f; freq = %d; cycle = %d; duty = %d\r\n",index, climbSpeed,  pTone->toneFreq, pTone->cycle, pTone->toneDutyCycle);
+    struct timerSound ts = getTimerSoundConfig(pTone);
+    printf("cycCnt = %d; onCnt = %d; offCnt = %d\r\n", ts.cyclCount, ts.onCount, ts.offCount);
 }
 
 double getVarioSpeed (uint8_t index) {
     return varioSpeed[index];
 }
 
-struct timerSound getTimerSoundConfig (struct varioTone* tone) {
+struct timerSound getTimerSoundConfig (struct varioTone* pTone) {
 	struct timerSound timersound;
-	timersound.cyclCount = (48000000/4*0.001) * tone->cycle;
-	timersound.onCount = (timersound.cyclCount / 100) * (tone->toneDutyCycle);
+	timersound.cyclCount = (48000000/4*0.001) * pTone->cycle;
+	timersound.onCount = (timersound.cyclCount / 100) * (pTone->toneDutyCycle);
 	timersound.offCount = timersound.cyclCount - timersound.onCount;
 	return timersound;
 }
