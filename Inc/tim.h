@@ -11,5 +11,5 @@ extern TIM_HandleTypeDef tim2;
 
 
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim);
-void TimStart (TIM_HandleTypeDef *timer, uint32_t period);
+void TimStart ( uint32_t period);
 void TimStop (void);

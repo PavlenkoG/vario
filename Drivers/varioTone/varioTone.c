@@ -20,21 +20,19 @@ uint32_t varioFreq[VARIO_TABLE_SIZE] = {
 };
 // vario cycle in ms
 uint32_t varioCycle[VARIO_TABLE_SIZE] = {
-//      0   1   2   3   4   5   6   7   8   9    10   11   12  13  14
-        10, 10, 10, 10, 10, 10, 10, 10, 300, 300, 300, 125, 90, 70, 50
+//      0    1    2    3    4    5    6    7    8    9    10   11   12   13   14
+        100, 100, 100, 100, 100, 100, 100, 1000, 800, 500, 450, 300, 350, 200, 150
 };
 // vario duty cycle in %
-uint8_t varioDuty[VARIO_TABLE_SIZE] = {
-//      0    1    2    3    4    5    6    7    8    9   10  11  12  13  14
-        100, 100, 100, 100, 100, 100, 10,  20,  30,  50, 50, 50, 50, 50, 50
+uint32_t varioDuty[VARIO_TABLE_SIZE] = {
+//      0    1    2    3    4    5  6   7    8    9   10  11  12  13  14
+        100, 100, 100, 95, 90, 80, 10,  20,  50,  55, 60, 63, 65, 68, 70
 };
+
 
 void getVarioTone(double climbSpeed, struct varioTone* tone) {
     uint8_t index = 0;
     double offsetPercent = 0.0;
-    double climbDiff = 0.0;
-    double tableDiff = 0.0;
-    double percent = 0.0;
 
     uint32_t toneFreq = 0;
     // find the table index
@@ -48,53 +46,43 @@ void getVarioTone(double climbSpeed, struct varioTone* tone) {
         tone->cycle = varioCycle[VARIO_TABLE_SIZE-1];
         tone->toneDutyCycle = varioDuty[VARIO_TABLE_SIZE-1];
     }
+    //sarching for current table index
     if (climbSpeed > varioSpeed[0]&&climbSpeed <varioSpeed[VARIO_TABLE_SIZE-1]) {
         while (climbSpeed > varioSpeed[index]) {
             index ++;
         }
     }
     if (index && index < VARIO_TABLE_SIZE) {
-        climbDiff = fabs(fabs(climbSpeed) - fabs(varioSpeed[index]));
-        tableDiff = fabs(fabs(varioSpeed[index]) - fabs(varioSpeed[index-1]));
-        if (tableDiff != 0) {
-            percent = climbDiff/tableDiff;
-        }
         // tone frequency calculation
-        tone->toneFreq = (unsigned int)((varioFreq[index]-varioFreq[index-1])*(1-percent))+varioFreq[index-1];
+        tone->toneFreq = getLinearInterpolation(&varioFreq[0], index, climbSpeed);
 
         // cycle calculation
-        if (varioCycle[index-1]>varioCycle[index]){
-            tone->cycle =(unsigned int) ((double)(varioCycle[index])+((double)((abs(varioCycle[index]-varioCycle[index-1])))*(1-percent)));
-        }else {
-            tone->cycle =(unsigned int) ((double)(varioCycle[index-1])-((double)((abs(varioCycle[index]-varioCycle[index-1])))*(1-percent)));
-        }
+        tone->cycle = getLinearInterpolation(&varioCycle[0], index, climbSpeed);
 
         // duty cycle calculation
-        if (varioDuty[index-1]>varioDuty[index]){
-            tone->toneDutyCycle =(unsigned int) ((double)(varioDuty[index])+((double)((abs(varioDuty[index]-varioDuty[index-1])))*(1-percent)));
-        }else {
-            tone->toneDutyCycle =(unsigned int) ((double)(varioDuty[index-1])-((double)((abs(varioDuty[index]-varioDuty[index-1])))*(1-percent)));
-        }
+        tone->toneDutyCycle = getLinearInterpolation(&varioDuty[0], index, climbSpeed);
 
     }
-
-    printf("speed = %f; percent = %f; freq = %d; cycle = %d; duty = %d\r\n", climbSpeed, percent*100, tone->toneFreq, tone->cycle, tone->toneDutyCycle);
-
+    printf("index = %d; speed = %f; freq = %d; cycle = %d; duty = %d\r\n",index, climbSpeed,  tone->toneFreq, tone->cycle, tone->toneDutyCycle);
 }
 
 double getVarioSpeed (uint8_t index) {
     return varioSpeed[index];
 }
 
-uint32_t onTime (struct varioTone* tone) {
-	return (((48000000/4*0.001) * tone->cycle)/100) * tone->toneDutyCycle;
+struct timerSound getTimerSoundConfig (struct varioTone* tone) {
+	struct timerSound timersound;
+	timersound.cyclCount = (48000000/4*0.001) * tone->cycle;
+	timersound.onCount = (timersound.cyclCount / 100) * (tone->toneDutyCycle);
+	timersound.offCount = timersound.cyclCount - timersound.onCount;
+	return timersound;
 }
-uint32_t offTime (struct varioTone * tone) {
-	return getCycle - onTime(&tone);
-}
-uint32_t getCycle (struct varioTone* tone) {
-	return (48000000/4*0.001) * tone->cycle;
-}
-uint32_t getDutyCycle (struct varioTone* tone) {
-	return tone->toneDutyCycle;
+
+uint32_t getLinearInterpolation (uint32_t *calcArray, uint8_t index, double speed) {
+	//f(x0) + (f(x1) - f(x0))/(x1-x0) * (x-x0)
+	double dfx0 = (double)(calcArray[index-1]);
+	double dfx1 = (double)(calcArray[index]);
+	double dx0 = (double)(varioSpeed[index-1]);
+	double dx1 = (double)(varioSpeed[index]);
+	return (unsigned int) (dfx0 + (dfx1-dfx0)/(dx1-dx0)*(speed-dx0));
 }
