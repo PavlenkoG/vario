@@ -32,7 +32,7 @@
 /* SSD1306 data buffer */
 static uint8_t SSD1306_Buffer_all[SSD1306_WIDTH * SSD1306_HEIGHT / 8 + 1], *SSD1306_Buffer = SSD1306_Buffer_all + 1;
 
-DMA_HandleTypeDef hdma_i2c2_tx;
+//DMA_HandleTypeDef hdma_i2c2_tx;
 /* Private SSD1306 structure */
 typedef struct {
 	uint16_t CurrentX;

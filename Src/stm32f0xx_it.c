@@ -50,6 +50,7 @@
   */
 extern DMA_HandleTypeDef hdma_i2c2_tx;
 extern TIM_HandleTypeDef tim2;
+extern TIM_HandleTypeDef tim17;
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
@@ -145,6 +146,17 @@ void I2C2_IRQHandler (void)
 void TIM2_IRQHandler(void)
 {
 	HAL_TIM_IRQHandler(&tim2);
+}
+
+void TIM17_IRQHandler (void)
+{
+	HAL_TIM_IRQHandler(&tim17);
+	HAL_NVIC_ClearPendingIRQ(TIM17_IRQn);
+}
+void EXTI4_15_IRQHandler (void)
+{
+	HAL_GPIO_EXTI_IRQHandler(USER_BUTTON_PIN);
+	HAL_NVIC_ClearPendingIRQ(EXTI4_15_IRQn);
 }
 /**
   * @}

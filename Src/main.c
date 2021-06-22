@@ -110,16 +110,22 @@ int main(void) {
 	altimeterHight altimeter;
 	double verticalSpeed;
 
+	uint8_t buttonPressed = 0;
+	uint8_t soundOnOff = 0;
+	double soundCounter = -1.7;
+
 	HAL_Init();
 
 	/* Configure the system clock to have a system clock = 48 Mhz */
 	SystemClock_Config();
 
 	USART_DBG_Init();
-//	SSD1306_Init();
+  	SSD1306_Init();
 	MX_I2C1_Init();
     MX_TIM3_Init();
     MX_TIM2_Init();
+    MX_TIM17_Init();
+    initLedButton();
 
     bmp.delay_ms = HAL_Delay;
     bmp.dev_id = 0xec;//BMP280_I2C_ADDR_SEC;
@@ -144,6 +150,8 @@ int main(void) {
 	} else {
 		printf("Error by pressure sensor init\r\n");
 	}
+	printf("HCLK = %d Hz\r\n", HAL_RCC_GetHCLKFreq());
+	printf("PCLK = %d Hz\r\n", HAL_RCC_GetPCLK1Freq());
 
 	bmp280Period = bmp280_compute_meas_time(&bmp);
 	printf ("Pressure sensor period = %d\r\n",bmp280Period);
@@ -164,52 +172,59 @@ int main(void) {
 		bmp280Period = bmp280_get_status(&bmpStatus, &bmp);
 	}
 
+	HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
 
-	averageAltiOld = alti;
-	timer_new = uwTick;
+	//TimStart(&tim3,(12000000/tone.toneFreq));
 	while (1) {
-		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
-		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
-    	rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
-//		MPU9250_drv_read_gyro(&gyro);
-//		MPU9250_drv_read_accel(&accel);
-
-//		alti = BME280_CalcTf(pres);
-
-		alti = BME280_CalcTf(pres);
-//		alti = simpleKalman(&kalman,BME280_CalcTf(pres));
-		if (arrayIndex < ALTITUDE_SAMPLES_FILTER) {
-			arrayIndex ++;
-			averageAlti = averageAlti + alti;
+		if (HAL_GPIO_ReadPin(USER_LED_PORT, USER_LED_PIN)) {
+			getVarioTone(soundCounter, &tone);
+			//if (!(tim2.Instance->CR1 & TIM_CR1_CEN)) {
+			if (!buttonPressed) {
+				buttonPressed = 1;
+				HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
+			}
 		} else {
-			averageAlti = averageAlti/ALTITUDE_SAMPLES_FILTER;
-			if (timer) {
-				speed = (averageAlti - averageAltiOld)/((double)timer /1000);
-				averageSpeed = simpleKalman(&kalman,speed);
-				tone.averageSpeed = averageSpeed;
+			buttonPressed = 0;
+			if (tim2.Instance->CR1 & TIM_CR1_CEN) {
+				HAL_TIM_OC_Stop(&tim2, TIM_CHANNEL_1);
+				HAL_TIM_PWM_Stop(&tim3, TIM_CHANNEL_1);
 			}
-			timer_new = uwTick;
-			if (timer_new > timer_old) {
-				timer = timer_new - timer_old;
-			} else {
-				timer = timer_old - timer_new;
-			}
-			timer_old = timer_new;
-
-			//printf("$%.4f %f \r\n", averageSpeed, averageAlti);
-			getVarioTone(averageSpeed, &tone);
-			arrayIndex = 0;
-			averageAltiOld = averageAlti;
-			averageAlti = 0.0;
+		}
+		if (soundCounter < 10.0) {
+			soundCounter += 0.1;
+		} else {
+			soundCounter = -9;
 		}
 
+    	char sCnt[8];
+    	char sFrq[8];
+    	char sCycl[8];
+    	char sOn[8];
+    	char sOff[8];
+
+    	/*
+		sprintf(sCnt, "vario %f", soundCounter);//tone.toneFreq);
+		sprintf(sFrq, "freq %d", tone.toneFreq);
+		sprintf(sCycl, "cycl %d", tone.cycle);
+		sprintf(sOn, "on t %d", onTime(&tone));
+		sprintf(sOff, "off t %d", offTime(&tone));
+
+		SSD1306_GotoXY(0,0);
+		SSD1306_Puts(sCnt,&Font_7x10,1);
+		SSD1306_UpdateScreen();
+		SSD1306_GotoXY(0,10);
+		SSD1306_Puts(sFrq,&Font_7x10,1);
+		SSD1306_UpdateScreen();
+		SSD1306_GotoXY(0,20);
+		SSD1306_Puts(sCycl,&Font_7x10,1);
+		SSD1306_UpdateScreen();
+		*/
 		/*
 		if (averageSpeed > 0.2)
-			TimStart(&tim3,(12000000/tone.toneFreq));
 		else
 			TimStop();
 		*/
-		HAL_Delay(10);
+		HAL_Delay(1000);
 	}
 }
 
