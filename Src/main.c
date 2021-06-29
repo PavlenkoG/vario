@@ -143,13 +143,20 @@ int main(void) {
 	conf.odr = BMP280_ODR_0_5_MS;
 	rslt = bmp280_set_config(&conf, &bmp);
 
-//	rslt = MPU9250_drv_init();
 
 	if (rslt == BMP280_OK) {
 		printf("Pressure sensor OK\r\n");
 	} else {
 		printf("Error by pressure sensor init\r\n");
 	}
+
+	rslt = MPU9250_drv_init();
+	if (rslt == MPU9250_OK) {
+		printf("Accelerator OK\r\n");
+	} else {
+		printf("Error by accelerator initialization\r\n");
+	}
+
 	printf("HCLK = %d Hz\r\n", HAL_RCC_GetHCLKFreq());
 	printf("PCLK = %d Hz\r\n", HAL_RCC_GetPCLK1Freq());
 
@@ -157,7 +164,7 @@ int main(void) {
 	printf ("Pressure sensor period = %d\r\n",bmp280Period);
 	bmp280_set_power_mode(BMP280_NORMAL_MODE,&bmp);
 
-//	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
+	MPU9250_drv_start_maesure(MPU9250_BIT_GYRO_FS_SEL_250DPS,MPU9250_BIT_ACCEL_FS_SEL_8G,MPU9250_BIT_DLPF_CFG_5HZ,MPU9250_BIT_A_DLPFCFG_5HZ);
 
 	alti = BME280_CalcTf(pres);
 	HAL_Delay(1000);
@@ -172,13 +179,9 @@ int main(void) {
 		bmp280Period = bmp280_get_status(&bmpStatus, &bmp);
 	}
 
-	HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
-
-	//TimStart(&tim3,(12000000/tone.toneFreq));
 	while (1) {
 		if (HAL_GPIO_ReadPin(USER_LED_PORT, USER_LED_PIN)) {
 			getVarioTone(soundCounter, &tone);
-			//if (!(tim2.Instance->CR1 & TIM_CR1_CEN)) {
 			if (!buttonPressed) {
 				buttonPressed = 1;
 				HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
@@ -196,13 +199,27 @@ int main(void) {
 			soundCounter = -9;
 		}
 
+		rslt = bmp280_get_uncomp_data(&ucomp_data, &bmp);
+		rslt = bmp280_get_comp_pres_double(&pres, ucomp_data.uncomp_press, &bmp);
+    	rslt = bmp280_get_comp_temp_32bit(&temp,ucomp_data.uncomp_temp,&bmp);
+		alti = BME280_CalcTf(pres);
+		MPU9250_drv_read_accel(&accel);
+		MPU9250_drv_read_gyro(&gyro);
+
+    	char sPres[16];
+		sprintf(sPres, "%.1f %.1f", pres, alti);
+
+		printf("$%.2f %.2f %.2f %.2f %.2f %.2f %.2f %.2f %d\r\n",alti, pres, accel.x, accel.y, accel.z, gyro.x, gyro.y, gyro.z, uwTick);
+		SSD1306_GotoXY(0,0);
+		SSD1306_Puts(sPres,&Font_7x10,1);
+		SSD1306_UpdateScreen();
+    	/*
     	char sCnt[8];
     	char sFrq[8];
     	char sCycl[8];
     	char sOn[8];
     	char sOff[8];
 
-    	/*
 		sprintf(sCnt, "vario %f", soundCounter);//tone.toneFreq);
 		sprintf(sFrq, "freq %d", tone.toneFreq);
 		sprintf(sCycl, "cycl %d", tone.cycle);
@@ -219,12 +236,7 @@ int main(void) {
 		SSD1306_Puts(sCycl,&Font_7x10,1);
 		SSD1306_UpdateScreen();
 		*/
-		/*
-		if (averageSpeed > 0.2)
-		else
-			TimStop();
-		*/
-		HAL_Delay(1000);
+		HAL_Delay(50);
 	}
 }
 
@@ -310,7 +322,7 @@ void assert_failed(char* file, uint32_t line)
  * @}
  */
 double BME280_CalcTf(double pressure) {
-    return (44330 * (1.0 - pow(((pressure / 100) / 1013.25), 0.1903)));
+    return (44330 * (1.0 - pow((pressure / 101325.0), 0.190295)));
 }
 /**
  * @}

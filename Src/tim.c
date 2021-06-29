@@ -33,7 +33,7 @@ void MX_TIM3_Init (void) {
 	sConfig.OCIdleState  = TIM_OCIDLESTATE_RESET;
 	sConfig.Pulse = 0x4E20;
 	HAL_TIM_PWM_ConfigChannel(&tim3, &sConfig, TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
+	//HAL_TIM_PWM_Start(&tim3,TIM_CHANNEL_1);
 
 }
 
@@ -113,26 +113,26 @@ void TimStop (void) {
 }
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM2) {
-		//HAL_TIM_OC_Stop(&tim2, TIM_CHANNEL_1);
 		struct timerSound timersound = getTimerSoundConfig(&tone);
+		// on sound
 		if (!onOff) {
 			__HAL_TIM_SET_COMPARE(htim,TIM_CHANNEL_1, timersound.onCount);
 			__HAL_TIM_SET_AUTORELOAD(htim, timersound.onCount);
-			//HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
 			TimStart(12000000/tone.toneFreq);
 			onOff = 1;
 		}
+		// off sound
 		else {
 			if (timersound.offCount) {
 				__HAL_TIM_SET_COMPARE(htim,TIM_CHANNEL_1, timersound.offCount);
 				__HAL_TIM_SET_AUTORELOAD(htim, timersound.offCount);
-				//HAL_TIM_OC_Start_IT(&tim2,TIM_CHANNEL_1);
 				TimStop();
 			}
 			onOff = 0;
 		}
 	}
 
+	// button filter
 	if (htim->Instance == TIM17) {
 		if (HAL_GPIO_ReadPin(USER_BUTTON_PORT, USER_BUTTON_PIN)){
 			HAL_GPIO_TogglePin(USER_LED_PORT, USER_LED_PIN);

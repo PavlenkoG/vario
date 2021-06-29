@@ -64,9 +64,9 @@ void getVarioTone(double climbSpeed, struct varioTone* pTone) {
         pTone->toneDutyCycle = getLinearInterpolation(&varioDuty[0], index, climbSpeed);
 
     }
-    printf("index = %d; speed = %f; freq = %d; cycle = %d; duty = %d\r\n",index, climbSpeed,  pTone->toneFreq, pTone->cycle, pTone->toneDutyCycle);
-    struct timerSound ts = getTimerSoundConfig(pTone);
-    printf("cycCnt = %d; onCnt = %d; offCnt = %d\r\n", ts.cyclCount, ts.onCount, ts.offCount);
+    // printf("index = %d; speed = %f; freq = %d; cycle = %d; duty = %d\r\n",index, climbSpeed,  pTone->toneFreq, pTone->cycle, pTone->toneDutyCycle);
+    // struct timerSound ts = getTimerSoundConfig(pTone);
+    // printf("cycCnt = %d; onCnt = %d; offCnt = %d\r\n", ts.cyclCount, ts.onCount, ts.offCount);
 }
 
 double getVarioSpeed (uint8_t index) {
